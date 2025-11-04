@@ -1,26 +1,64 @@
-import React, { useState } from 'react';
-import { Bot, Send, Music2, ThumbsUp } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Bot, Send, Music2, ThumbsUp, Mic, Plus, ListPlus } from 'lucide-react';
 
-export default function ChatAssistant({ onPlay }) {
+export default function ChatAssistant({ onPlayNow, onEnqueue, onEnqueueMany }) {
   const [mood, setMood] = useState('happy');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
+  const [listening, setListening] = useState(false);
 
   const backend = import.meta.env.VITE_BACKEND_URL || '';
 
-  const ask = async () => {
+  // Speech recognition (voice command)
+  const recognitionRef = useRef(null);
+  useEffect(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    const rec = new SR();
+    rec.lang = 'en-US';
+    rec.interimResults = false;
+    rec.maxAlternatives = 1;
+    rec.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setMessage(transcript);
+      setListening(false);
+      ask(transcript);
+    };
+    rec.onend = () => setListening(false);
+    recognitionRef.current = rec;
+  }, []);
+
+  const speak = (text) => {
+    try {
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.rate = 1;
+      utter.pitch = 1;
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utter);
+    } catch {}
+  };
+
+  const ask = async (overrideMessage) => {
+    const msg = typeof overrideMessage === 'string' ? overrideMessage : message;
     setLoading(true);
     try {
       const res = await fetch(`${backend}/api/agent/suggest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mood, message })
+        body: JSON.stringify({ mood, message: msg })
       });
       const data = await res.json();
-      setSuggestions(data.suggestions || []);
+      const list = data.suggestions || [];
+      setSuggestions(list);
+      if (list.length > 0) {
+        speak(`I found ${list.length} suggestions for ${mood}. Say play to start, or add to queue.`);
+      } else {
+        speak('I could not find anything. Try another mood or phrase.');
+      }
     } catch (e) {
       console.error(e);
+      speak('There was a problem fetching suggestions.');
     } finally {
       setLoading(false);
     }
@@ -28,12 +66,44 @@ export default function ChatAssistant({ onPlay }) {
 
   const quickMoods = ['happy', 'chill', 'focus', 'party', 'sad'];
 
+  const startListening = () => {
+    const rec = recognitionRef.current;
+    if (!rec) {
+      speak('Voice recognition is not supported in this browser.');
+      return;
+    }
+    try {
+      window.speechSynthesis.cancel();
+      rec.start();
+      setListening(true);
+    } catch {}
+  };
+
+  const enqueueAll = () => {
+    const items = suggestions.map((s) => s.source === 'youtube'
+      ? { type: 'youtube', id: s.id, title: s.title, thumbnail: s.thumbnail, source: 'YouTube' }
+      : { type: 'radio', stream_url: s.stream_url, title: s.title, source: 'Radio' }
+    );
+    onEnqueueMany && onEnqueueMany(items);
+    speak('Added all suggestions to your queue.');
+  };
+
   return (
     <section id="assistant" className="mx-auto w-full max-w-5xl px-4 py-8 text-white">
       <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
-        <div className="mb-4 flex items-center gap-2 text-white/80">
-          <Bot className="h-5 w-5" />
-          <span className="text-sm">Virtual Assistant</span>
+        <div className="mb-4 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-white/80">
+            <Bot className="h-5 w-5" />
+            <span className="text-sm">Voice Assistant</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={startListening} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${listening ? 'bg-red-600' : 'bg-white/10 hover:bg-white/20'}`}>
+              <Mic className="h-4 w-4" /> {listening ? 'Listening…' : 'Speak'}
+            </button>
+            <button onClick={enqueueAll} disabled={suggestions.length === 0} className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20 disabled:opacity-50">
+              <ListPlus className="h-4 w-4" /> Add all to queue
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-col gap-3 md:flex-row">
@@ -46,11 +116,11 @@ export default function ChatAssistant({ onPlay }) {
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             className="w-full flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2"
-            placeholder="Say something like: I'm in a great mood and want energetic tracks"
+            placeholder="Tell me what you want to hear or say it aloud"
           />
-          <button onClick={ask} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2 font-medium hover:bg-purple-500 disabled:opacity-60">
+          <button onClick={() => ask()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2 font-medium hover:bg-purple-500 disabled:opacity-60">
             <Send className="h-4 w-4" />
-            {loading ? 'Thinking...' : 'Ask' }
+            {loading ? 'Thinking…' : 'Ask'}
           </button>
         </div>
 
@@ -74,28 +144,36 @@ export default function ChatAssistant({ onPlay }) {
                   <div className="flex h-full w-full items-center justify-center text-white/70">FM</div>
                 )}
               </div>
-              <div className="flex-1">
-                <div className="font-medium leading-tight">{s.title}</div>
+              <div className="flex-1 min-w-0">
+                <div className="font-medium leading-tight truncate" title={s.title}>{s.title}</div>
                 <div className="text-xs text-white/60">{s.source === 'youtube' ? 'YouTube Track' : 'Live Radio'}</div>
               </div>
-              <button
-                onClick={() => onPlay(s.source === 'youtube' ? { type: 'youtube', id: s.id, title: s.title, thumbnail: s.thumbnail } : { type: 'radio', stream_url: s.stream_url, title: s.title })}
-                className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20"
-              >
-                <Music2 className="h-4 w-4" /> Play
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onEnqueue && onEnqueue(s.source === 'youtube' ? { type: 'youtube', id: s.id, title: s.title, thumbnail: s.thumbnail } : { type: 'radio', stream_url: s.stream_url, title: s.title })}
+                  className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20"
+                >
+                  <Plus className="h-4 w-4" /> Queue
+                </button>
+                <button
+                  onClick={() => onPlayNow && onPlayNow(s.source === 'youtube' ? { type: 'youtube', id: s.id, title: s.title, thumbnail: s.thumbnail } : { type: 'radio', stream_url: s.stream_url, title: s.title })}
+                  className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-sm hover:bg-purple-500"
+                >
+                  <Music2 className="h-4 w-4" /> Play
+                </button>
+              </div>
             </div>
           ))}
         </div>
 
         {suggestions.length === 0 && (
           <div className="mt-6 rounded-lg border border-dashed border-white/10 p-4 text-white/70">
-            Tell me your mood and I will queue some YouTube tracks and radios you might like.
+            Tell me your mood and I will queue some YouTube tracks and radios you might like. Use the mic to speak hands‑free.
           </div>
         )}
 
         <div className="mt-4 flex items-center gap-2 text-xs text-white/50">
-          <ThumbsUp className="h-4 w-4" /> Tips: paste a YouTube link below in the player to play a specific track.
+          <ThumbsUp className="h-4 w-4" /> Tips: after the first interaction, autoplay and background playback usually work best.
         </div>
       </div>
     </section>

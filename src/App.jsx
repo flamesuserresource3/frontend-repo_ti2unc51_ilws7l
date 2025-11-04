@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import ChatAssistant from './components/ChatAssistant';
@@ -6,9 +6,38 @@ import RadioDirectory from './components/RadioDirectory';
 import MediaPlayer from './components/MediaPlayer';
 
 export default function App() {
-  const [current, setCurrent] = useState(null);
+  const [queue, setQueue] = useState([]); // [{type:'youtube'|'radio', id?, title, thumbnail?, stream_url?}]
+  const [currentIndex, setCurrentIndex] = useState(-1);
 
-  // Allow manual YouTube URL input as fallback
+  const hasCurrent = currentIndex >= 0 && currentIndex < queue.length;
+  const current = hasCurrent ? queue[currentIndex] : null;
+
+  const playNow = useCallback((item) => {
+    setQueue([item]);
+    setCurrentIndex(0);
+  }, []);
+
+  const addToQueue = useCallback((item) => {
+    setQueue((q) => [...q, item]);
+    if (currentIndex === -1) {
+      setCurrentIndex(0);
+    }
+  }, [currentIndex]);
+
+  const addManyToQueue = useCallback((items) => {
+    setQueue((q) => [...q, ...items]);
+    if (currentIndex === -1 && items.length > 0) setCurrentIndex(0);
+  }, [currentIndex]);
+
+  const next = useCallback(() => {
+    setCurrentIndex((i) => (i + 1 < queue.length ? i + 1 : -1));
+  }, [queue.length]);
+
+  const prev = useCallback(() => {
+    setCurrentIndex((i) => (i > 0 ? i - 1 : i));
+  }, []);
+
+  // Manual YouTube input
   const [manualUrl, setManualUrl] = useState('');
   const parseVideoId = (url) => {
     try {
@@ -18,18 +47,17 @@ export default function App() {
       return null;
     } catch { return null; }
   };
-
   const playManual = () => {
     const vid = parseVideoId(manualUrl);
-    if (vid) setCurrent({ type: 'youtube', id: vid, title: 'YouTube Track' });
+    if (vid) playNow({ type: 'youtube', id: vid, title: 'YouTube Track' });
   };
 
   return (
     <div className="min-h-screen bg-black text-white">
       <Navbar />
       <Hero />
-      <ChatAssistant onPlay={setCurrent} />
-      <RadioDirectory onPlay={setCurrent} />
+      <ChatAssistant onPlayNow={playNow} onEnqueue={addToQueue} onEnqueueMany={addManyToQueue} />
+      <RadioDirectory onPlay={playNow} />
 
       {/* Manual YouTube input */}
       <section className="mx-auto w-full max-w-5xl px-4 py-4">
@@ -42,10 +70,16 @@ export default function App() {
         </div>
       </section>
 
-      <MediaPlayer current={current} />
+      <MediaPlayer
+        queue={queue}
+        currentIndex={currentIndex}
+        onPrev={prev}
+        onNext={next}
+        onSeekTo={(idx) => setCurrentIndex(idx)}
+      />
 
       <footer className="mt-8 border-t border-white/10 py-6 text-center text-white/60">
-        Built with an AI music assistant, YouTube playback, and live radios.
+        Built with an AI music assistant, voice control, YouTube playback, auto-queue, and live radios.
       </footer>
     </div>
   );
