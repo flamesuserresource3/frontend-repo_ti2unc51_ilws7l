@@ -1,122 +1,101 @@
-import { useEffect, useRef, useState } from "react";
-import { Send, Sparkles } from "lucide-react";
+import React, { useState } from 'react';
+import { Bot, Send, Music2, ThumbsUp } from 'lucide-react';
 
-function BotSuggestion({ onPick }) {
-  const suggestions = [
-    "Make me a focus playlist with chill synths",
-    "Find upbeat pop similar to Dua Lipa",
-    "Suggest karaoke-friendly 80s classics",
-  ];
-  return (
-    <div className="flex flex-wrap gap-2">
-      {suggestions.map((s) => (
-        <button
-          key={s}
-          onClick={() => onPick(s)}
-          className="text-sm px-3 py-1.5 rounded-full bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 transition-colors"
-        >
-          {s}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-export default function ChatAssistant() {
-  const [messages, setMessages] = useState([
-    {
-      role: "assistant",
-      content:
-        "Hey! I’m your AI music buddy. Ask me for recommendations, moods, or karaoke picks.",
-    },
-  ]);
-  const [input, setInput] = useState("");
+export default function ChatAssistant({ onPlay }) {
+  const [mood, setMood] = useState('happy');
+  const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
-  const listRef = useRef(null);
+  const [suggestions, setSuggestions] = useState([]);
 
-  useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+  const backend = import.meta.env.VITE_BACKEND_URL || '';
 
-  const sendMessage = async (text) => {
-    if (!text.trim() || loading) return;
-    const userMsg = { role: "user", content: text.trim() };
-    setMessages((m) => [...m, userMsg]);
-    setInput("");
+  const ask = async () => {
     setLoading(true);
-
-    // Simulated AI response for now
-    setTimeout(() => {
-      const reply = {
-        role: "assistant",
-        content:
-          "Here are three tracks you might like: 1) Starlit Drive — Neon Echoes 2) Lucid Avenue — Night Runner 3) Auralyn — Violet Skies. Want me to queue them?",
-      };
-      setMessages((m) => [...m, reply]);
+    try {
+      const res = await fetch(`${backend}/api/agent/suggest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mood, message })
+      });
+      const data = await res.json();
+      setSuggestions(data.suggestions || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
       setLoading(false);
-    }, 700);
+    }
   };
 
-  return (
-    <section id="chat" className="max-w-7xl mx-auto px-4 py-14">
-      <div className="flex items-center gap-2 mb-4">
-        <div className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500 via-blue-500 to-amber-400 text-white">
-          <Sparkles size={16} />
-        </div>
-        <h2 className="text-2xl md:text-3xl font-bold">AI Music Chat</h2>
-      </div>
+  const quickMoods = ['happy', 'chill', 'focus', 'party', 'sad'];
 
-      <div className="grid md:grid-cols-3 gap-6">
-        <div className="md:col-span-2 rounded-2xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/5 backdrop-blur flex flex-col h-[480px]">
-          <div ref={listRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                className={`${
-                  m.role === "assistant"
-                    ? "bg-gradient-to-r from-purple-50 to-blue-50 dark:from-white/5 dark:to-white/0"
-                    : "bg-black/5 dark:bg-white/10 ml-auto"
-                } max-w-[85%] md:max-w-[70%] rounded-xl px-3.5 py-2.5`}
-              >
-                <div className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</div>
-              </div>
-            ))}
-            {loading && (
-              <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-white/5 dark:to-white/0 max-w-[85%] md:max-w-[70%] rounded-xl px-3.5 py-2.5">
-                <div className="text-sm">Thinking…</div>
-              </div>
-            )}
-          </div>
-          <div className="p-3 border-t border-black/10 dark:border-white/10">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                sendMessage(input);
-              }}
-              className="flex items-center gap-2"
-            >
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask for a mood, genre, or karaoke picks"
-                className="flex-1 rounded-xl bg-black/5 dark:bg-white/10 px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-purple-500/50"
-              />
-              <button
-                type="submit"
-                disabled={loading}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-purple-600 via-blue-600 to-amber-500 text-white px-3.5 py-2.5 disabled:opacity-60"
-              >
-                <Send size={16} /> Send
-              </button>
-            </form>
-          </div>
+  return (
+    <section id="assistant" className="mx-auto w-full max-w-5xl px-4 py-8 text-white">
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+        <div className="mb-4 flex items-center gap-2 text-white/80">
+          <Bot className="h-5 w-5" />
+          <span className="text-sm">Virtual Assistant</span>
         </div>
-        <div className="rounded-2xl border border-black/10 dark:border-white/10 p-4 bg-white/60 dark:bg-white/5 backdrop-blur">
-          <div className="text-sm text-black/70 dark:text-white/70 mb-2">Try one:</div>
-          <BotSuggestion onPick={(s) => sendMessage(s)} />
-          <div className="mt-6 text-xs text-black/60 dark:text-white/60">
-            The assistant currently runs on-device as a demo. We can hook this to a live backend later for real recommendations and playlists.
+
+        <div className="flex flex-col gap-3 md:flex-row">
+          <select value={mood} onChange={(e) => setMood(e.target.value)} className="w-full rounded-lg border border-white/10 bg-black/40 px-3 py-2 md:max-w-[180px]">
+            {quickMoods.map((m) => (
+              <option key={m} value={m}>{m[0].toUpperCase() + m.slice(1)}</option>
+            ))}
+          </select>
+          <input
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            className="w-full flex-1 rounded-lg border border-white/10 bg-black/40 px-3 py-2"
+            placeholder="Say something like: I'm in a great mood and want energetic tracks"
+          />
+          <button onClick={ask} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-lg bg-purple-600 px-4 py-2 font-medium hover:bg-purple-500 disabled:opacity-60">
+            <Send className="h-4 w-4" />
+            {loading ? 'Thinking...' : 'Ask' }
+          </button>
+        </div>
+
+        {/* Quick mood chips */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {quickMoods.map((m) => (
+            <button key={m} onClick={() => { setMood(m); setMessage(''); }} className={`rounded-full border px-3 py-1 text-sm ${mood===m ? 'border-purple-400 text-purple-300' : 'border-white/10 text-white/70 hover:text-white'}`}>
+              {m}
+            </button>
+          ))}
+        </div>
+
+        {/* Suggestions */}
+        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+          {suggestions.map((s, idx) => (
+            <div key={idx} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3">
+              <div className="h-14 w-14 overflow-hidden rounded-lg bg-white/10">
+                {s.source === 'youtube' ? (
+                  <img src={s.thumbnail} alt={s.title} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-white/70">FM</div>
+                )}
+              </div>
+              <div className="flex-1">
+                <div className="font-medium leading-tight">{s.title}</div>
+                <div className="text-xs text-white/60">{s.source === 'youtube' ? 'YouTube Track' : 'Live Radio'}</div>
+              </div>
+              <button
+                onClick={() => onPlay(s.source === 'youtube' ? { type: 'youtube', id: s.id, title: s.title, thumbnail: s.thumbnail } : { type: 'radio', stream_url: s.stream_url, title: s.title })}
+                className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20"
+              >
+                <Music2 className="h-4 w-4" /> Play
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {suggestions.length === 0 && (
+          <div className="mt-6 rounded-lg border border-dashed border-white/10 p-4 text-white/70">
+            Tell me your mood and I will queue some YouTube tracks and radios you might like.
           </div>
+        )}
+
+        <div className="mt-4 flex items-center gap-2 text-xs text-white/50">
+          <ThumbsUp className="h-4 w-4" /> Tips: paste a YouTube link below in the player to play a specific track.
         </div>
       </div>
     </section>

@@ -1,21 +1,18 @@
-import { Music, Sparkles } from "lucide-react";
+import React from 'react';
+import { Headphones, Radio, Youtube, Bot } from 'lucide-react';
 
 export default function Navbar() {
   return (
-    <header className="sticky top-0 z-20 backdrop-blur supports-[backdrop-filter]:bg-white/60 bg-white/50 dark:bg-black/40 border-b border-black/10 dark:border-white/10">
-      <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-        <a href="#home" className="flex items-center gap-2 font-semibold text-lg">
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 via-blue-500 to-amber-400 text-white shadow-sm">
-            <Music size={18} />
-          </span>
-          <span>VibeTune AI</span>
-        </a>
-        <nav className="hidden md:flex items-center gap-6 text-sm">
-          <a href="#home" className="hover:text-purple-600 transition-colors">Home</a>
-          <a href="#chat" className="hover:text-purple-600 transition-colors flex items-center gap-1">
-            <Sparkles size={16} /> Chat
-          </a>
-          <a href="#karaoke" className="hover:text-purple-600 transition-colors">Karaoke</a>
+    <header className="sticky top-0 z-40 w-full border-b border-white/10 bg-black/60 backdrop-blur">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 text-white">
+        <div className="flex items-center gap-2">
+          <Headphones className="h-6 w-6 text-purple-400" />
+          <span className="font-semibold">VibePilot</span>
+        </div>
+        <nav className="hidden md:flex items-center gap-6 text-sm text-white/80">
+          <a href="#assistant" className="hover:text-white flex items-center gap-2"><Bot className="h-4 w-4" />Assistant</a>
+          <a href="#radios" className="hover:text-white flex items-center gap-2"><Radio className="h-4 w-4" />Radios</a>
+          <a href="#player" className="hover:text-white flex items-center gap-2"><Youtube className="h-4 w-4" />Player</a>
         </nav>
       </div>
     </header>
