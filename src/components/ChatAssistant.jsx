@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Bot, Send, Music2, ThumbsUp, Mic, Plus, ListPlus } from 'lucide-react';
 
 export default function ChatAssistant({ onPlayNow, onEnqueue, onEnqueueMany }) {
-  const [mood, setMood] = useState('happy');
+  const [mood, setMood] = useState('chill');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
@@ -10,7 +10,7 @@ export default function ChatAssistant({ onPlayNow, onEnqueue, onEnqueueMany }) {
 
   const backend = import.meta.env.VITE_BACKEND_URL || '';
 
-  // Speech recognition (voice command)
+  // ---------- Voice recognition ----------
   const recognitionRef = useRef(null);
   useEffect(() => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -20,7 +20,7 @@ export default function ChatAssistant({ onPlayNow, onEnqueue, onEnqueueMany }) {
     rec.interimResults = false;
     rec.maxAlternatives = 1;
     rec.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
+      const transcript = event.results?.[0]?.[0]?.transcript || '';
       setMessage(transcript);
       setListening(false);
       ask(transcript);
@@ -39,26 +39,94 @@ export default function ChatAssistant({ onPlayNow, onEnqueue, onEnqueueMany }) {
     } catch {}
   };
 
+  // ---------- Local fallback suggestions (no backend needed) ----------
+  const moodBank = {
+    chill: [
+      { id: 'jfKfPfyJRdk', title: 'lofi hip hop radio - beats to relax/study to', source: 'youtube' },
+      { id: 'DWcJFNfaw9c', title: '4 A.M Study Session - lofi hip hop/chill beats', source: 'youtube' },
+      { id: '7NOSDKb0HlU', title: 'cozy lofi beats', source: 'youtube' },
+    ],
+    happy: [
+      { id: 'pRpeEdMmmQ0', title: 'Shakira - Waka Waka', source: 'youtube' },
+      { id: 'kJQP7kiw5Fk', title: 'Luis Fonsi - Despacito', source: 'youtube' },
+      { id: '3AtDnEC4zak', title: 'Maroon 5 - Sugar', source: 'youtube' },
+    ],
+    focus: [
+      { id: 'f02mOEt11OQ', title: 'alpha waves for focus', source: 'youtube' },
+      { id: 'e3L1PIY1pN8', title: 'coding music to focus', source: 'youtube' },
+      { id: 'WPni755-Krg', title: 'Deep Focus — 2 hours', source: 'youtube' },
+    ],
+    party: [
+      { id: '2Vv-BfVoq4g', title: 'Ed Sheeran - Perfect (Remix)', source: 'youtube' },
+      { id: 'JGwWNGJdvx8', title: 'Ed Sheeran - Shape of You', source: 'youtube' },
+      { id: '60ItHLz5WEA', title: 'Alan Walker - Faded', source: 'youtube' },
+    ],
+    sad: [
+      { id: 'hLQl3WQQoQ0', title: 'Adele - Someone Like You', source: 'youtube' },
+      { id: 'RBumgq5yVrA', title: 'Passenger - Let Her Go', source: 'youtube' },
+      { id: 'YQHsXMglC9A', title: 'Adele - Hello', source: 'youtube' },
+    ],
+  };
+
+  const buildThumb = (id) => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+
+  const localSuggest = (qMood, qText) => {
+    const key = (qText || '').toLowerCase();
+    let picks = moodBank[qMood] || moodBank.chill;
+    // lightweight keyword routing
+    if (key.includes('lofi') || key.includes('study')) picks = moodBank.chill;
+    if (key.includes('focus') || key.includes('deep')) picks = moodBank.focus;
+    if (key.includes('happy') || key.includes('dance') || key.includes('party')) picks = moodBank.party;
+    if (key.includes('sad') || key.includes('slow')) picks = moodBank.sad;
+
+    // add one radio option for variety
+    const list = picks.map((p) => ({
+      source: 'youtube',
+      id: p.id,
+      title: p.title,
+      thumbnail: buildThumb(p.id),
+    }));
+    list.push({
+      source: 'radio',
+      title: 'Lofi Girl Radio',
+      stream_url: 'https://stream-icy.bauermedia.co.uk/lofigirl.mp3',
+    });
+    return list;
+  };
+
+  // ---------- Ask flow ----------
   const ask = async (overrideMessage) => {
     const msg = typeof overrideMessage === 'string' ? overrideMessage : message;
     setLoading(true);
     try {
-      const res = await fetch(`${backend}/api/agent/suggest`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mood, message: msg })
-      });
-      const data = await res.json();
-      const list = data.suggestions || [];
-      setSuggestions(list);
-      if (list.length > 0) {
-        speak(`I found ${list.length} suggestions for ${mood}. Say play to start, or add to queue.`);
-      } else {
-        speak('I could not find anything. Try another mood or phrase.');
+      if (backend) {
+        const res = await fetch(`${backend}/api/agent/suggest`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mood, message: msg })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const list = (data?.suggestions || []).map((s) => s.source === 'youtube'
+            ? { ...s, source: 'youtube', thumbnail: s.thumbnail || buildThumb(s.id) }
+            : { ...s, source: 'radio' }
+          );
+          if (list.length) {
+            setSuggestions(list);
+            speak(`I found ${list.length} suggestions for ${mood}.`);
+            return;
+          }
+        }
       }
+      // fallback if backend not set or empty result
+      const local = localSuggest(mood, msg);
+      setSuggestions(local);
+      speak(`Here are some ${mood} picks I can play right away.`);
     } catch (e) {
       console.error(e);
-      speak('There was a problem fetching suggestions.');
+      const local = localSuggest(mood, msg);
+      setSuggestions(local);
+      speak('I had trouble reaching the server, so I queued up some local picks.');
     } finally {
       setLoading(false);
     }
@@ -74,6 +142,7 @@ export default function ChatAssistant({ onPlayNow, onEnqueue, onEnqueueMany }) {
     }
     try {
       window.speechSynthesis.cancel();
+      if (listening) rec.stop();
       rec.start();
       setListening(true);
     } catch {}
@@ -173,7 +242,7 @@ export default function ChatAssistant({ onPlayNow, onEnqueue, onEnqueueMany }) {
         )}
 
         <div className="mt-4 flex items-center gap-2 text-xs text-white/50">
-          <ThumbsUp className="h-4 w-4" /> Tips: after the first interaction, autoplay and background playback usually work best.
+          <ThumbsUp className="h-4 w-4" /> Tip: Click Play once to grant autoplay permissions. The queue will advance automatically after that.
         </div>
       </div>
     </section>

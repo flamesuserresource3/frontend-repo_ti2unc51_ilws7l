@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Radio, Youtube, Volume2, Pause, Play, SkipForward, SkipBack } from 'lucide-react';
 
-// A unified player that can play YouTube videos (with Iframe API) and audio streams.
+// Unified player for YouTube (Iframe API) and radio streams.
 export default function MediaPlayer({ queue = [], currentIndex = -1, onPrev, onNext, onSeekTo }) {
   const current = currentIndex >= 0 && currentIndex < queue.length ? queue[currentIndex] : null;
   const audioRef = useRef(null);
@@ -12,11 +12,10 @@ export default function MediaPlayer({ queue = [], currentIndex = -1, onPrev, onN
   const isYouTube = current?.type === 'youtube';
   const isRadio = current?.type === 'radio';
 
-  // Load YouTube Iframe API once when first needed
+  // Load YouTube Iframe API when needed
   useEffect(() => {
     if (!isYouTube) return;
     if (window.YT && window.YT.Player) return;
-
     const tag = document.createElement('script');
     tag.src = 'https://www.youtube.com/iframe_api';
     document.body.appendChild(tag);
@@ -25,7 +24,7 @@ export default function MediaPlayer({ queue = [], currentIndex = -1, onPrev, onN
   // Create/destroy YT player on track changes
   useEffect(() => {
     if (!isYouTube) {
-      // Cleanup YT if switching away
+      // Cleanup YT when switching away
       if (ytPlayerRef.current) {
         try { ytPlayerRef.current.destroy(); } catch {}
         ytPlayerRef.current = null;
@@ -34,10 +33,7 @@ export default function MediaPlayer({ queue = [], currentIndex = -1, onPrev, onN
     }
 
     const setup = () => {
-      if (!ytContainerRef.current) return;
-      if (!current?.id) return;
-
-      // Clear previous container content
+      if (!ytContainerRef.current || !current?.id) return;
       ytContainerRef.current.innerHTML = '';
       const div = document.createElement('div');
       div.id = `yt-player-${Date.now()}`;
@@ -54,11 +50,10 @@ export default function MediaPlayer({ queue = [], currentIndex = -1, onPrev, onN
         },
         events: {
           onReady: (e) => {
-            setIsPlaying(true);
-            try { e.target.playVideo(); } catch {}
+            try { e.target.playVideo(); setIsPlaying(true); } catch {}
           },
           onStateChange: (e) => {
-            // 0 = ended, 1 = playing, 2 = paused
+            // 0 = ended, 1 = playing, 2 = paused, 5 = cued
             if (e.data === 0) {
               setIsPlaying(false);
               onNext && onNext();
@@ -92,23 +87,23 @@ export default function MediaPlayer({ queue = [], currentIndex = -1, onPrev, onN
   // Handle radio playback
   useEffect(() => {
     if (!isRadio) return;
-    if (!audioRef.current) return;
     const el = audioRef.current;
+    if (!el) return;
 
-    const tryPlay = async () => {
-      try { await el.play(); setIsPlaying(true); } catch { setIsPlaying(false); }
-    };
-
-    el.addEventListener('ended', () => {
+    const onEnded = () => {
       setIsPlaying(false);
       onNext && onNext();
-    });
+    };
+
+    el.addEventListener('ended', onEnded);
 
     // Load and play
+    el.pause();
     el.load();
-    tryPlay();
+    el.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
 
     return () => {
+      el.removeEventListener('ended', onEnded);
       try { el.pause(); } catch {}
     };
   }, [isRadio, current?.stream_url, onNext]);
@@ -116,11 +111,10 @@ export default function MediaPlayer({ queue = [], currentIndex = -1, onPrev, onN
   const togglePlay = () => {
     if (isYouTube && ytPlayerRef.current) {
       const state = ytPlayerRef.current.getPlayerState?.();
-      // 1 playing
       if (state === 1) {
-        try { ytPlayerRef.current.pauseVideo(); } catch {}
+        try { ytPlayerRef.current.pauseVideo(); setIsPlaying(false); } catch {}
       } else {
-        try { ytPlayerRef.current.playVideo(); } catch {}
+        try { ytPlayerRef.current.playVideo(); setIsPlaying(true); } catch {}
       }
       return;
     }
@@ -177,12 +171,12 @@ export default function MediaPlayer({ queue = [], currentIndex = -1, onPrev, onN
               <div className="text-xs text-white/60">{current.source || (isYouTube ? 'YouTube' : 'Radio')}</div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={onPrev} disabled={currentIndex <= 0} className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20 disabled:opacity-50"><SkipBack className="h-4 w-4" /></button>
+              <button onClick={onPrev} disabled={queue.length === 0} className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20 disabled:opacity-50"><SkipBack className="h-4 w-4" /></button>
               <button onClick={togglePlay} className="inline-flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium hover:bg-purple-500">
                 {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                 {isPlaying ? 'Pause' : 'Play'}
               </button>
-              <button onClick={onNext} disabled={currentIndex === -1 || currentIndex >= queue.length - 1} className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20 disabled:opacity-50"><SkipForward className="h-4 w-4" /></button>
+              <button onClick={onNext} disabled={queue.length === 0} className="inline-flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-sm hover:bg-white/20 disabled:opacity-50"><SkipForward className="h-4 w-4" /></button>
             </div>
           </div>
         )}
