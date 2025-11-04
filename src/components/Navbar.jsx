@@ -1,5 +1,5 @@
 import React from 'react';
-import { Headphones, Radio, Youtube, Bot } from 'lucide-react';
+import { Headphones, Youtube, Bot } from 'lucide-react';
 
 export default function Navbar() {
   return (
@@ -11,7 +11,6 @@ export default function Navbar() {
         </div>
         <nav className="hidden md:flex items-center gap-6 text-sm text-white/80">
           <a href="#assistant" className="hover:text-white flex items-center gap-2"><Bot className="h-4 w-4" />Assistant</a>
-          <a href="#radios" className="hover:text-white flex items-center gap-2"><Radio className="h-4 w-4" />Radios</a>
           <a href="#player" className="hover:text-white flex items-center gap-2"><Youtube className="h-4 w-4" />Player</a>
         </nav>
       </div>

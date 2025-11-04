@@ -3,14 +3,12 @@ import Navbar from './components/Navbar';
 import Hero from './components/Hero';
 import ChatAssistant from './components/ChatAssistant';
 import MediaPlayer from './components/MediaPlayer';
-import RadioDirectory from './components/RadioDirectory';
 
 export default function App() {
   const [queue, setQueue] = useState([]); // [{type:'youtube'|'radio', id?, title, thumbnail?, stream_url?}]
   const [currentIndex, setCurrentIndex] = useState(-1);
 
   const playNow = useCallback((item) => {
-    // Play immediately but keep the rest of the queue: insert after current
     setQueue((q) => {
       if (currentIndex < 0) {
         setCurrentIndex(0);
@@ -35,11 +33,20 @@ export default function App() {
   }, []);
 
   const next = useCallback(() => {
-    setCurrentIndex((i) => (i + 1 < queue.length ? i + 1 : (queue.length > 0 ? 0 : -1))); // wrap to start
+    setCurrentIndex((i) => {
+      const n = queue.length;
+      if (n === 0) return -1;
+      const j = i + 1;
+      return j < n ? j : 0; // wrap to start
+    });
   }, [queue.length]);
 
   const prev = useCallback(() => {
-    setCurrentIndex((i) => (i > 0 ? i - 1 : (queue.length > 0 ? queue.length - 1 : -1))); // wrap to end
+    setCurrentIndex((i) => {
+      const n = queue.length;
+      if (n === 0) return -1;
+      return i > 0 ? i - 1 : n - 1; // wrap to end
+    });
   }, [queue.length]);
 
   // Manual YouTube input
@@ -73,8 +80,6 @@ export default function App() {
           </div>
         </div>
       </section>
-
-      <RadioDirectory onPlay={addToQueue} />
 
       <MediaPlayer
         queue={queue}
